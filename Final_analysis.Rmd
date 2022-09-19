@@ -1,0 +1,256 @@
+---
+title: "Transcriptome analysis of mammary adipose tissue"
+author: "Dev Raj Bhattarai"
+date: "5/7/2022"
+---
+```{r include=FALSE}
+library(tidyverse)
+library(dplyr)
+library(DESeq2)
+```
+
+Analyzing the RNASeq data using DESeq2 standard workflow vignette
+
+Citation - Love, M.I., Huber, W., Anders, S. (2014) Moderated estimation of fold change and dispersion for RNA-seq data with DESeq2. Genome Biology, 15:550. 10.1186/s13059-014-0550-8
+
+I have downloaded a gene expression file named "Tumor-associated and control mammary adipose tissue in lean and high fat diet-induced obese mice" with an GEO accession number - GSE201316.
+The file is located at D:\Research Paper\DESEQ with .txt format
+
+Reading the file
+```{r}
+main_data <- read.table("GSE201316_allCounts.txt", header = TRUE, sep = "\t", row.names = 1)
+main_data <- data.frame(main_data)
+```
+
+
+Creating a metadata 
+```{r}
+samples <- c("X0.C.2_L_S5","X0.C.2_R_S10", "X0.H.2_L_S16", "X0.H.2_R_S22", "X1.H.2_L_S11", "X1.H.2_R_S17", "X2.C.2_L_S1", "X2.C.2_R_S6", "X2.H.2_L_S12", "X2.H.2_R_S18", "X3.C.2_L_S2", "X3.C.2_R_S7", "X3.H.2_L_S13", "X3.H.2_R_S19", "X4.H.2_L_S14", "X4.H.2_R_S20", "X6.C.2_L_S3", "X6.C.2_R_S8", "X8.H.2_L_S15", "X8.H.2_R_S21", "X9.C.2_L_S4", "X9.C.2_R_S9" )
+treatment <- c("CD", "CD", "HFD", "HFD", "HFD", "HFD", "CD", "CD", "HFD", "HFD", "CD", "CD", "HFD", "HFD", "HFD", "HFD", "CD", "CD", "HFD", "HFD","CD", "CD")
+tumor_status <- c("T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C")
+group <- c("CD_T", "CD_C", "HFD_T", "HFD_C", "HFD_T", "HFD_C", "CD_T", "CD_C", "HFD_T", "HFD_C", "CD_T", "CD_C", "HFD_T", "HFD_C", "HFD_T", "HFD_C", "CD_T", "CD_C", "HFD_T", "HFD_C", "CD_T", "CD_C")
+meta_data <- data.frame(samples, treatment, tumor_status, group, stringsAsFactors = FALSE, row.names = 1)
+```
+
+
+Checking if all of the row names of the meta_data are in the same order as the column names of the main_counts data
+```{r}
+all(rownames(meta_data) == colnames(main_data))
+```
+
+creating DESeq object
+```{r warning=FALSE}
+dds <- DESeqDataSetFromMatrix(countData = main_data, colData = meta_data, design = ~tumor_status)
+dds
+```
+pre-filtering 
+```{r}
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep,]
+dds
+```
+
+
+Normalization
+```{r}
+dds <- estimateSizeFactors(dds)
+sizeFactors(dds)
+```
+Extracting normalized counts
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+normalizedmain_data <- counts(dds, normalized = TRUE)
+```
+
+performing log transformation
+```{r}
+vsd <- vst(dds, blind = TRUE)
+```
+
+Extracting the vst matrix 
+```{r}
+vsd_matrix <- assay(vsd)
+```
+
+computing pairwise correlation value
+```{r}
+vsd_cor <- cor(vsd_matrix)
+```
+
+Plotting the heatmap
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(pheatmap)
+pheatmap(vsd_cor, annotation = dplyr::select(meta_data, c("treatment", "tumor_status")))
+```
+
+visualizing PCA plot
+```{r}
+p <- plotPCA(vsd, intgroup = c("treatment", "tumor_status"))
+p + geom_text(aes(label = rownames(meta_data)))
+```
+
+creating DESeq object
+```{r warning=FALSE}
+dds <- DESeqDataSetFromMatrix(countData = main_data, colData = meta_data, design = ~treatment + tumor_status + treatment:tumor_status)
+dds$treatment
+dds$tumor_status
+```
+
+Running analysis
+```{r}
+dds <- DESeq(dds)
+resultsNames(dds)
+```
+
+Exploring Log2fold change 
+```{r}
+l2f <- results(dds, name ="treatmentHFD.tumor_statusT" , alpha = 0.05)
+```
+
+Differentially expressed genes
+```{r}
+summary(l2f)
+```
+
+MA plot
+```{r}
+plotMA(l2f, ylim = c(-8,8))
+```  
+creating column indicating if the gene is DE
+```{r}
+l2f <- data.frame(l2f) %>%
+  rownames_to_column(var = "ensgene")
+l2f <- data.frame(l2f)
+l2f$diffexpressed <- "NO CHANGE"
+l2f$diffexpressed[l2f$log2FoldChange > 0.32 & l2f$padj < 0.05] <- "UP"
+l2f$diffexpressed[l2f$log2FoldChange < 0.32 & l2f$padj < 0.05] <- "DOWN"
+l2f <- data.frame(l2f)
+```
+
+```{r}
+l2f_sig <- data.frame(l2f)
+  l2f_sig <-  subset(l2f_sig , padj < 0.05 & abs(log2FoldChange) > 0.32) 
+  l2f_sig <- l2f_sig %>%
+  arrange(padj)
+```
+
+Annotating genes
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=TRUE}
+library(org.Mm.eg.db)
+library(AnnotationDbi)
+library(annotables)
+deg_all <- data.frame(l2f)
+deg_all$ensgene <- mapIds(org.Mm.eg.db, keys = deg_all$ensgene, keytype = "SYMBOL", column = "ENSEMBL")
+deg_all <- data.frame(deg_all) %>%
+left_join(x = deg_all, y = grcm38[, c("ensgene", "symbol", "description")], by = "ensgene")
+deg_all <- data.frame(deg_all)
+deg_all <- na.exclude(deg_all)
+```
+sub-setting significant DE genes only
+```{r}
+deg_all_main <- data.frame(deg_all)
+  deg_all_main <-  subset(deg_all_main , padj < 0.05 & abs(log2FoldChange) > 0.32) 
+  deg_all_main <- deg_all_main %>%
+  arrange(padj)
+  deg_all_main <- data.frame(deg_all_main)
+  deg_all_main <- deg_all_main[-5,]
+  deg_all_main <- data.frame(deg_all_main)
+  
+```
+
+sub-setting normalized counts to only significant DE genes
+```{r message=FALSE, warning=FALSE}
+sig_norm_counts <- normalizedmain_data[l2f_sig$ensgene,]
+```
+
+Visualizing result- Heatmap
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(pheatmap)
+library(dplyr)
+library(RColorBrewer)
+heat_colors <- brewer.pal(6, "YlOrRd")
+pheatmap(sig_norm_counts, color = heat_colors, cluster_rows = TRUE, show_rownames = FALSE, annotation = dplyr::select(meta_data,treatment), scale = "row")
+```
+
+
+volcano plot
+```{r warning=FALSE}
+library(ggrepel)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+deg_all <- deg_all %>% 
+  arrange(padj) %>% 
+  mutate(genelabels = "")
+deg_all <- data.frame(deg_all)
+  deg_all <- deg_all[-5,]
+  deg_all <- data.frame(deg_all)
+deg_all$genelabels[1:10] <- deg_all$symbol[1:10]
+
+ggplot(deg_all) + 
+  geom_point(aes(x = log2FoldChange, y = -log10(padj), color = diffexpressed)) + 
+  geom_text_repel(aes(x = log2FoldChange, y = -log10(padj), label = genelabels)) +
+  ggtitle("Volcano Plot") +
+  xlab("log2 told change") + 
+  ylab("-log10 adjusted p-value") +
+  theme(plot.title = element_text(size = rel(1.5), hjust = 0.5), axis.title = element_text(size = rel(1.25)))
+```
+
+```{r}
+expression <- sig_norm_counts[7,]
+group <- meta_data[,"group"]
+boxplot(expression ~group, main = l2f_sig[7,"ensgene"])
+  
+```
+
+Top 20 Significant genes
+```{r}
+deg_20 <- deg_all_main[1:20,] %>% 
+  dplyr::select(symbol,description,diffexpressed)
+deg_20 <- data.frame(deg_20)
+view(deg_20)
+```
+
+Preparing input data for enrichment analysis 
+```{r}
+library(org.Mm.eg.db)
+library(AnnotationDbi)
+library(annotables)
+sig_genes <- data.frame(deg_all)
+sig_genes$ensgene <- mapIds(org.Mm.eg.db, keys = sig_genes$ensgene, column = "ENTREZID", keytype = "ENSEMBL", multiVals = "first")
+rownames(sig_genes) <- make.names(sig_genes$ensgene, unique = TRUE)
+sig_genes <-na.omit(sig_genes)
+sig_genes <- data.frame(sig_genes, row.names = NULL)
+sig_genes <- data.frame(sig_genes)
+```
+KEGG pathway enrichment analysis 
+```{r message=FALSE, warning=FALSE}
+library(clusterProfiler)
+library(enrichplot)
+library(org.Mm.eg.db)
+library(AnnotationDbi)
+library(DOSE)
+library(dplyr)
+library(tidyverse)
+all_genes <- sig_genes$ensgene
+enriched_pathways <- sig_genes$ensgene[sig_genes$padj < 0.05 & !is.na(sig_genes$log2FoldChange) & abs(sig_genes$log2FoldChange) > 0.32]
+enriched_pathways <- na.exclude(enriched_pathways)
+kk <- enrichKEGG(gene = enriched_pathways,  organism = 'mmu')
+dotplot(kk, showCategory = 20) + ggtitle("KEGG enrichment analysis") +
+  theme(axis.text.y = element_text(size = rel(0.75)))
+```
+
+GO enrichment analysis 
+```{r}
+ego <- enrichGO(gene = enriched_pathways, 
+                universe = all_genes,
+                keyType = "ENTREZID",
+                OrgDb = org.Mm.eg.db, 
+                ont = "all", 
+                pAdjustMethod = "BH", 
+                qvalueCutoff = 0.05, 
+                readable = TRUE)
+dotplot(ego, split="ONTOLOGY", showCategory = 5) + ggtitle("GO enrichment analysis") +
+  theme(axis.text.y = element_text(size = rel(0.75))) +
+  facet_grid(ONTOLOGY~., scale="free")
+```
