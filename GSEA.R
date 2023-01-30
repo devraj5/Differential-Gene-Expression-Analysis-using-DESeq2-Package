@@ -46,4 +46,3 @@ dotplot(gse, showCategory=10, split=".sign") +
   theme(axis.text.y = element_text(size = rel(1))) +
   facet_grid(.~.sign)
 
-gseaplot(gse, by = "all", title = gse$Description[1], geneSetID = 1)
