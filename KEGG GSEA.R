@@ -18,7 +18,7 @@ library(organism, character.only = TRUE)
 
 
 # reading in data from deseq2
-df = read.csv(file.choose(), header=TRUE)
+df = read.csv('D:\Research Paper\DESEQ\diff_between_obese_and_lean.csv', header=TRUE)
 
 
 
