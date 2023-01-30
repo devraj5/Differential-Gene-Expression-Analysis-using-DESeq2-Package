@@ -19,5 +19,33 @@ The dataset contained RNA expression profile of adipose tissues from 22 Female m
 RNA was harvested and sequenced using Illumina NextSeq 500.
 
 
+Deseq2 Object:
+
+There were two condtions and two genotypes:
+Conditions/Treatments: T and C
+Genotypes: HFD and CD
+
+Running the Deseq2 object: dds <- DESeqDataSetFromMatrix(countData = main_data, colData = meta_data, design = ~genotype + condition + genotype:condition)
+gave the result:
+"Intercept"              "genotype_HFD_vs_CD"     "condition_T_vs_C"       "genotypeHFD.conditionT"
+
+To observe the effect of treatment (tumor co-culture) in the obsese samples: Obese Tumor vs Obese control 
+the contrast choose was:
+l2f <- results(dds, lsit (c("condition_T_vs_C","genotypeHFD.conditionT")), alpha = 0.05)
 
 
+To observe the effect of treatment (tumor co-culture) in the lean samples: lean Tumor vs lean control 
+the contrast choose was:
+l2f <- results(dds, contrast = c("condition","T", "C"), alpha = 0.05)
+
+To observe the difference between lean and obsese with treatment (tumor co-culture): Obese Tumor vs lean tumor 
+the contrast choose was:
+l2f <- results(dds, list(c(  "genotype_HFD_vs_CD","T",  "genotypeHFD.conditionT"), alpha = 0.05)
+
+To observe the difference between lean and obsese without treatment (control co-culture): Obese Control vs lean control 
+the contrast choose was:
+l2f <- results(dds, contrast =c("genotype_HFD_vs_CD","T",  "HFD", "CD")), alpha = 0.05)
+
+And the final, the one I wanted to see. I wanted to select only those genes that were differentially expressed among all genotypes (HFD_T vs HFD_C vs CD_T vs CD_C) or lets say the difference response of treatment across genotype.  
+the contrast choose was:
+l2f <- results(dds, name="genotypeHFD.conditionT", alpha = 0.05)
