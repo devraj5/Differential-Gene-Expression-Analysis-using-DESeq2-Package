@@ -13,7 +13,7 @@ library(organism, character.only = TRUE)
 
 
 # reading in data from deseq2
-df = read.csv(file.choose(), header=TRUE)
+df = read.csv('gene_list', header=TRUE)
 
 
 
