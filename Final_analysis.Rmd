@@ -18,7 +18,7 @@ The file is located at D:\Research Paper\DESEQ with .txt format
 
 Reading the file
 ```{r}
-main_data <- read.table("GSE201316_allCounts.txt", header = TRUE, sep = "\t", row.names = 1)
+main_data <- read.table("D:\\Research Paper\\DESEQ\\GSE201316_allCounts.txt", header = TRUE, sep = "\t", row.names = 1)
 main_data <- data.frame(main_data)
 ```
 
@@ -26,10 +26,10 @@ main_data <- data.frame(main_data)
 Creating a metadata 
 ```{r}
 samples <- c("X0.C.2_L_S5","X0.C.2_R_S10", "X0.H.2_L_S16", "X0.H.2_R_S22", "X1.H.2_L_S11", "X1.H.2_R_S17", "X2.C.2_L_S1", "X2.C.2_R_S6", "X2.H.2_L_S12", "X2.H.2_R_S18", "X3.C.2_L_S2", "X3.C.2_R_S7", "X3.H.2_L_S13", "X3.H.2_R_S19", "X4.H.2_L_S14", "X4.H.2_R_S20", "X6.C.2_L_S3", "X6.C.2_R_S8", "X8.H.2_L_S15", "X8.H.2_R_S21", "X9.C.2_L_S4", "X9.C.2_R_S9" )
-treatment <- c("CD", "CD", "HFD", "HFD", "HFD", "HFD", "CD", "CD", "HFD", "HFD", "CD", "CD", "HFD", "HFD", "HFD", "HFD", "CD", "CD", "HFD", "HFD","CD", "CD")
-tumor_status <- c("T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C")
+genotype <- c("CD", "CD", "HFD", "HFD", "HFD", "HFD", "CD", "CD", "HFD", "HFD", "CD", "CD", "HFD", "HFD", "HFD", "HFD", "CD", "CD", "HFD", "HFD","CD", "CD")
+condition <- c("T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C", "T", "C")
 group <- c("CD_T", "CD_C", "HFD_T", "HFD_C", "HFD_T", "HFD_C", "CD_T", "CD_C", "HFD_T", "HFD_C", "CD_T", "CD_C", "HFD_T", "HFD_C", "HFD_T", "HFD_C", "CD_T", "CD_C", "HFD_T", "HFD_C", "CD_T", "CD_C")
-meta_data <- data.frame(samples, treatment, tumor_status, group, stringsAsFactors = FALSE, row.names = 1)
+meta_data <- data.frame(samples, genotype, condition, group, stringsAsFactors = FALSE, row.names = 1)
 ```
 
 
@@ -40,7 +40,7 @@ all(rownames(meta_data) == colnames(main_data))
 
 creating DESeq object
 ```{r warning=FALSE}
-dds <- DESeqDataSetFromMatrix(countData = main_data, colData = meta_data, design = ~tumor_status)
+dds <- DESeqDataSetFromMatrix(countData = main_data, colData = meta_data, design = ~genotype)
 dds
 ```
 pre-filtering 
@@ -79,20 +79,20 @@ vsd_cor <- cor(vsd_matrix)
 Plotting the heatmap
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
 library(pheatmap)
-pheatmap(vsd_cor, annotation = dplyr::select(meta_data, c("treatment", "tumor_status")))
+pheatmap(vsd_cor, annotation = dplyr::select(meta_data, c("genotype", "condition")))
 ```
 
 visualizing PCA plot
 ```{r}
-p <- plotPCA(vsd, intgroup = c("treatment", "tumor_status"))
+p <- plotPCA(vsd, intgroup = c("genotype", "condition"))
 p + geom_text(aes(label = rownames(meta_data)))
 ```
 
 creating DESeq object
 ```{r warning=FALSE}
-dds <- DESeqDataSetFromMatrix(countData = main_data, colData = meta_data, design = ~treatment + tumor_status + treatment:tumor_status)
-dds$treatment
-dds$tumor_status
+dds <- DESeqDataSetFromMatrix(countData = main_data, colData = meta_data, design = ~genotype + condition + genotype:condition)
+dds$genotype
+dds$condition
 ```
 
 Running analysis
@@ -103,7 +103,7 @@ resultsNames(dds)
 
 Exploring Log2fold change 
 ```{r}
-l2f <- results(dds, name ="treatmentHFD.tumor_statusT" , alpha = 0.05)
+l2f <- results(dds, name="genotypeHFD.conditionT", alpha = 0.05)
 ```
 
 Differentially expressed genes
@@ -169,7 +169,7 @@ library(pheatmap)
 library(dplyr)
 library(RColorBrewer)
 heat_colors <- brewer.pal(6, "YlOrRd")
-pheatmap(sig_norm_counts, color = heat_colors, cluster_rows = TRUE, show_rownames = FALSE, annotation = dplyr::select(meta_data,treatment), scale = "row")
+pheatmap(sig_norm_counts, color = heat_colors, cluster_rows = TRUE, show_rownames = FALSE, annotation = dplyr::select(meta_data,genotype), scale = "row")
 ```
 
 
@@ -183,8 +183,6 @@ deg_all <- deg_all %>%
   arrange(padj) %>% 
   mutate(genelabels = "")
 deg_all <- data.frame(deg_all)
-  deg_all <- deg_all[-5,]
-  deg_all <- data.frame(deg_all)
 deg_all$genelabels[1:10] <- deg_all$symbol[1:10]
 
 ggplot(deg_all) + 
@@ -197,10 +195,14 @@ ggplot(deg_all) +
 ```
 
 ```{r}
-expression <- sig_norm_counts[7,]
-group <- meta_data[,"group"]
-boxplot(expression ~group, main = l2f_sig[7,"ensgene"])
-  
+{
+  top_10 <- sig_norm_counts[1:10,]
+  for (i in 1:nrow(top_10)) {
+    expression <- top_10[i,]
+    group <- meta_data[,"group"]
+    boxplot(expression ~ group, main = l2f_sig[i, "ensgene"])
+  }
+}
 ```
 
 Top 20 Significant genes
